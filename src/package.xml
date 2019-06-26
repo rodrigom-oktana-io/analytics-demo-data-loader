@@ -32,7 +32,6 @@
     <members>RestApiFolderErrorResponse</members>
     <members>RestApiResponseBody</members>
     <members>SF_MetadataUtils</members>
-    <members>ScheduledTSDetails</members>
     <members>ScheduledTimeShifting</members>
     <members>SmartLookup</members>
     <members>TimeShiftSettings</members>
@@ -84,8 +83,6 @@
   </types>
   <types>
     <name>CustomObject</name>
-    <members>ScheduledTSDetails__ChangeEvent</members>
-    <members>ScheduledTSDetails__Tag</members>
     <members>ScheduledTSDetails__c</members>
   </types>
   <types>
