@@ -86,15 +86,15 @@ public with sharing class WaveConfiguratorUtils {
 
 		if(sfdcApi){
 			String salesforceHost = System.Url.getSalesforceBaseURL().toExternalForm();
-			totalUrl = salesforceHost + url;
+			totalUrl = salesforceHost + url;			
+		}
 
-			if(method.toUpperCase() == 'DELETE'){
-				totalUrl += '/' + parameter;
-			}
+		if(method.toUpperCase() == 'DELETE'){
+			totalUrl += '/' + parameter;
+		}
 
-			if(method.toUpperCase() == 'POST' || method.toUpperCase() == 'PUT'){
-				req.setBody(parameter);
-			}
+		if(method.toUpperCase() == 'POST' || method.toUpperCase() == 'PUT'){
+			req.setBody(parameter);
 		}
 
 		req.setMethod(method);
@@ -239,6 +239,22 @@ public with sharing class WaveConfiguratorUtils {
         return lstFolders.size() > 0;
     }
 
+	public String getFolderIdByDevName(String folderName){
+        List<Folder> lstFolders = [SELECT Id FROM Folder WHERE DeveloperName = :folderName AND Type = 'Insights'];
+        return lstFolders.size() > 0 ? lstFolders.get(0).Id : '';
+    }
+
+	public Map<String, String> getDatasetIdByDevNameMapping(List<String> lstDatasetNames){
+        
+		Map<String, String> mapping = new Map<String, String>();
+
+		for (EdgeMart edg : [SELECT Id, DeveloperName FROM EdgeMart WHERE DeveloperName IN :lstDatasetNames]) {
+			mapping.put(edg.DeveloperName, edg.Id);
+		}
+
+		return mapping;
+    }
+
 	public String getAnalyticsAppIdByDevName(String devName){
 		InsightsApplication anApp = [SELECT Id FROM InsightsApplication WHERE DeveloperName = :devName];
 		return anApp.Id;
@@ -247,7 +263,7 @@ public with sharing class WaveConfiguratorUtils {
 	public String insertFolder(String appLabel, String folderName) {
         String jsonToPost = '{"label":"' + appLabel + '","name":"' + folderName + '"}';
         HTTPResponse res = WaveConfiguratorUtils.httpCallout('/services/data/v' + this.apiVersion + '/wave/folders', 'POST', true, jsonToPost);
-        System.debug(res);
+        
 		if(!WaveConfiguratorUtils.checkStatus(res)){
             if(res.getBody().containsIgnoreCase('errorCode')){
                 List<RestApiFolderErrorResponse> r = (List<RestApiFolderErrorResponse>)JSON.deserialize(res.getBody(), List<RestApiFolderErrorResponse>.class);
@@ -258,6 +274,41 @@ public with sharing class WaveConfiguratorUtils {
         else {
             RestApiResponseBody responseBody = (RestApiResponseBody)JSON.deserialize(res.getBody(), RestApiResponseBody.class);
             return responseBody.id;
+        }
+    }
+
+	public static void setXmdForDataset(String datasetDevName, String xmdUrl, Double apiVersion){
+		Edgemart edgObj = [SELECT Id, CurrentId FROM EdgeMart WHERE DeveloperName = :datasetDevName];
+		HttpResponse resGetJsonXmd = WaveConfiguratorUtils.httpGetCallout(xmdUrl);
+		String xmdData = resGetJsonXmd.getBody();
+		String datasetId = edgObj.Id;
+		String currentVersionId = edgObj.CurrentId;
+		String urlToAttach = '/services/data/v' + apiVersion+ '/wave/datasets/' + datasetId + '/versions/' + currentVersionId + '/xmds/user';
+		HttpResponse resAttachXmd = WaveConfiguratorUtils.httpCallout(urlToAttach, 'PUT', true, xmdData);
+		if(!WaveConfiguratorUtils.checkStatus(resAttachXmd) || resAttachXmd.getBody().containsIgnoreCase('errorCode')){
+			List<RestApiErrorResponse> r = (List<RestApiErrorResponse>)JSON.deserialize(resAttachXmd.getBody(), List<RestApiErrorResponse>.class);
+			throw new WaveConfiguratorException('The xmd file could not be attached to the ' + datasetDevName + ' dataset. Cause: ' + r.get(0).message);
+		}
+	}
+
+	@future(callout=true)
+	public static void setXmdForDatasetFuture(String datasetDevName, String xmdUrl, Double apiVersion){
+		WaveConfiguratorUtils.setXmdForDataset(datasetDevName, xmdUrl, apiVersion);
+	}
+
+	public static Boolean containsDoubleByteCharacters(String input)
+	{
+    	Matcher m = Pattern.compile('[\\u0000-\\u007F]*').matcher(input);
+    	return !m.matches();
+	}
+
+	public static String getDatasetUploadStatus(String datasetDevName){
+        try {
+            InsightsExternalData iedObj = [SELECT Status FROM InsightsExternalData WHERE EdgemartAlias = :datasetDevName ORDER BY CreatedDate DESC LIMIT 1];
+            return iedObj.Status;
+        } 
+        catch (Exception ex) {
+            return '';
         }
     }
 }

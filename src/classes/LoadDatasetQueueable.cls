@@ -1,12 +1,14 @@
 public with sharing class LoadDatasetQueueable implements Queueable, Database.AllowsCallouts{
     
+    private Double apiVersion;
     private String sessionId;
     private String insightsAppName;
     private WaveApplicationDataset datasetToLoad;
 
-    public LoadDatasetQueueable(WaveApplicationDataset dataset, String insightsAppId, String sessionId) {
+    public LoadDatasetQueueable(WaveApplicationDataset dataset, String insightsAppId, Double apiVersion, String sessionId) {
         this.datasetToLoad = dataset;
 		this.sessionId = sessionId;
+        this.apiVersion = apiVersion;
         this.insightsAppName = 'SharedApp';
 
         if (String.isNotBlank(insightsAppId)) {
@@ -20,10 +22,37 @@ public with sharing class LoadDatasetQueueable implements Queueable, Database.Al
     public void execute(QueueableContext context) {
         // Process the load of the edgemart
         // This code is intented to work only for those csv files < 10MB
-        HttpResponse res = WaveConfiguratorUtils.httpGetCallout(this.datasetToLoad.csvDataUrl);
-        String csvData = res.getBody();
+        
+        // Retrieve the Data first
+        List<InsightsExternalDataPart> lstDataParts = new List<InsightsExternalDataPart>();        
 
-        res = WaveConfiguratorUtils.httpGetCallout(this.datasetToLoad.jsonSchemaUrl);
+        // Data is chunked or only one file?
+        if (this.datasetToLoad.dataParts != null && this.datasetToLoad.dataParts > 0) {
+            for (Integer i = 1; i <= this.datasetToLoad.dataParts; i++){
+                String dataUrl = this.datasetToLoad.csvDataUrl + this.datasetToLoad.name + '-dataPart-' + i + '.csv';
+                HttpResponse resData = WaveConfiguratorUtils.httpGetCallout(dataUrl);
+                String csvData = resData.getBody();
+                //System.debug(csvData.substringBefore('\n'));
+                InsightsExternalDataPart dataPart = new InsightsExternalDataPart();
+                dataPart.PartNumber = i;
+                Blob csvBlob = Blob.valueof(csvData);
+                dataPart.dataFile = csvBlob;
+                dataPart.DataLength = csvBlob.size();
+                lstDataParts.add(dataPart);
+            }
+        }
+        else {
+            HttpResponse resData = WaveConfiguratorUtils.httpGetCallout(this.datasetToLoad.csvDataUrl);
+            String csvData = resData.getBody();
+            InsightsExternalDataPart dataPart = new InsightsExternalDataPart();
+            dataPart.PartNumber = 1;
+            Blob csvBlob = Blob.valueof(csvData);
+            dataPart.dataFile = csvBlob;
+            dataPart.DataLength = csvBlob.size();
+            lstDataParts.add(dataPart);
+        }
+
+        HttpResponse res = WaveConfiguratorUtils.httpGetCallout(this.datasetToLoad.jsonSchemaUrl);
         String schemaData = res.getBody();
 
         InsightsExternalData iedObj = new InsightsExternalData();
@@ -37,18 +66,14 @@ public with sharing class LoadDatasetQueueable implements Queueable, Database.Al
 
         insert iedObj;
 
-        // Add the Data
-        InsightsExternalDataPart dataPart = new InsightsExternalDataPart();
-        dataPart.InsightsExternalDataId = iedObj.Id;
-        dataPart.PartNumber = 1;
-        Blob csvBlob = Blob.valueof(csvData);
-        Integer size = csvBlob.size();
-        dataPart.dataFile = csvBlob;
-        dataPart.DataLength = size;
-        insert dataPart;
+        for (InsightsExternalDataPart dataPart : lstDataParts) {
+            dataPart.InsightsExternalDataId = iedObj.Id;
+        }
+                
+        insert lstDataParts;
 
         // Final Step: Manage the Upload
         iedObj.Action = 'Process';
         update iedObj;
-    }
+    }    
 }
