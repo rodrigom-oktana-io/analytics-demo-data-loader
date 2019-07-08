@@ -19,6 +19,8 @@
     <members>GenericAppConfiguration</members>
     <members>HexUtil</members>
     <members>IMockarooHelper</members>
+    <members>LoadDatasetBatch</members>
+    <members>LoadDashboardQueueable</members>
     <members>LoadDatasetQueueable</members>
     <members>LoadEdgemartQueueable</members>
     <members>MetadataService</members>
@@ -29,6 +31,7 @@
     <members>ReplaceSfdcDigestByEdgemartsDirect</members>
     <members>ReplaceSfdcDigestByEdgemartsGeneric</members>
     <members>RestApiCompositeTreeResponse</members>
+    <members>RestApiErrorResponse</members>
     <members>RestApiFolderErrorResponse</members>
     <members>RestApiResponseBody</members>
     <members>SF_MetadataUtils</members>
